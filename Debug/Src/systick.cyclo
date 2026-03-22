@@ -1,0 +1,3 @@
+../Src/systick.c:11:6:systick_init	1
+../Src/systick.c:32:10:systick_get_tick	1
+../Src/systick.c:37:6:SysTick_Handler	1
