@@ -1,208 +1,153 @@
-# Bare-Metal UART Command Line Interface with Cooperative Scheduler on STM32F401RE
+# Bare-Metal UART Command-Line Interface on STM32F401RE
 
-## Project Overview
+A register-level embedded firmware project for the **STM32F401RE** on the **NUCLEO-F401RE** development board. It implements a UART command-line interface (CLI), interrupt-driven serial reception, a ring buffer, and a lightweight cooperative scheduler driven by SysTick.
 
-This project implements a **bare-metal firmware system** on the **STM32F401RE microcontroller** without using any vendor-provided hardware abstraction layers (HAL/LL) or RTOS.
+The firmware is written in C and uses direct peripheral-register access through CMSIS device definitions. It does not use STM32 HAL, LL, or an RTOS.
 
-The firmware provides:
+## Implemented functionality
 
-* An **interrupt-driven UART-based Command Line Interface (CLI)** for interactive control
-* A **cooperative, time-triggered task scheduler** using the SysTick timer
-* Modular **register-level drivers** for core peripherals
+- **USART2 CLI:** Interactive serial interface over the ST-LINK Virtual COM port.
+- **Interrupt-driven RX:** USART2 RXNE interrupt receives characters without polling the peripheral in the application loop.
+- **Ring buffer:** A 64-byte circular buffer decouples the UART receive ISR from CLI processing.
+- **Cooperative scheduler:** Periodic task dispatch based on a 1 ms SysTick counter.
+- **GPIO control:** Control the NUCLEO-F401RE user LED connected to PA5.
+- **Status reporting:** Display the firmware uptime through the CLI.
 
-This project demonstrates advanced embedded systems concepts, including **interrupt handling, real-time scheduling, UART communication, low-level peripheral control, and modular firmware architecture**.
+## Hardware and configuration
 
----
+| Item | Configuration |
+|---|---|
+| Development board | NUCLEO-F401RE |
+| Microcontroller | STM32F401RETx, Arm Cortex-M4 |
+| Firmware language | C |
+| Peripheral access | Direct register-level programming using CMSIS definitions |
+| System clock assumption | 16 MHz HSI default clock; no PLL setup is performed in the current `rcc_init()` |
+| UART peripheral | USART2 |
+| UART TX | PA2, alternate function AF7 |
+| UART RX | PA3, alternate function AF7 |
+| UART baud rate | 115200 baud (USART2 BRR configured for a 16 MHz peripheral clock) |
+| User LED | PA5 |
+| Scheduler timebase | SysTick, 1 ms tick |
 
-## Project Objectives
+Connect to the board's ST-LINK Virtual COM port using a serial terminal configured for **115200 baud, 8 data bits, no parity, 1 stop bit (115200 8-N-1)**.
 
-* Implement firmware using **direct register-level programming**
-* Develop an **interactive CLI** to control peripherals in real time
-* Build a **cooperative scheduler** to manage multiple tasks without blocking
-* Design a **scalable and modular firmware architecture** suitable for extension
-* Gain practical understanding of **Cortex-M NVIC, SysTick, timers, and peripheral integration**
+## CLI commands
 
----
+Type a command in the serial terminal and press Enter.
 
-## System Architecture
+| Command | Behaviour |
+|---|---|
+| `help` | Prints the available commands |
+| `led on` | Turns the PA5 user LED on |
+| `led off` | Turns the PA5 user LED off |
+| `status` | Prints uptime and scheduler status |
 
+The command parser currently supports these commands only. A PWM command is not implemented in the current source.
+
+## Firmware flow
+
+```text
+             USART2 RXNE Interrupt
+                      |
+                      v
+                RX Ring Buffer
+                      |
+                      v
+              CLI scheduled task
+                (10 ms period)
+                      |
+             +--------+--------+
+             |        |        |
+             v        v        v
+           help     led on/off  status
+
+                 SysTick ISR
+                 (1 ms tick)
+                      |
+                      v
+            Cooperative scheduler
 ```
-                 +------------------------+
-                 |   UART RX Interrupt    |
-                 +-----------+------------+
-                             |
-                             v
-                 +------------------------+
-                 |      RX Ring Buffer     |
-                 +-----------+------------+
-                             |
-                             v
-                 +------------------------+
-                 |        CLI Task        |
-                 +-----------+------------+
-                             |
-        +--------------------+--------------------+
-        |                    |                    |
-        v                    v                    v
-   LED Control           PWM Control          Status Reporting
 
-------------------------------------------------------------
-              SysTick Timer (1ms Tick)
-------------------------------------------------------------
-                             |
-                             v
-                    Cooperative Scheduler
-```
+The application initializes RCC, GPIO, USART2, SysTick, and the scheduler. It registers the CLI task with a 10 ms period and continuously calls `scheduler_run()`.
 
----
+## Repository layout
 
-## Hardware Configuration
-
-* **Development Board:** NUCLEO-F401RE
-* **Microcontroller:** STM32F401RET6 (Cortex-M4)
-* **LED:** On-board LED (PA5)
-* **UART:** USART2 for communication over ST-Link Virtual COM port
-
----
-
-## Peripherals Utilized
-
-| Peripheral | Function                                   |
-| ---------- | ------------------------------------------ |
-| GPIO       | LED output and button input                |
-| USART2     | UART CLI communication                     |
-| SysTick    | Scheduler timing and task management       |
-| TIMx       | PWM signal generation                      |
-| NVIC       | Interrupt handling and priority management |
-| RCC        | System and peripheral clock configuration  |
-
----
-
-## Software Architecture
-
-```
-.
-├── Core
-│   ├── main.c
-│   ├── startup.s
-│   └── system.c
-│
-├── drivers
-│   ├── gpio.c / gpio.h
-│   ├── uart.c / uart.h
-│   ├── timer.c / timer.h
-│   └── systick.c / systick.h
-│
-├── kernel
-│   ├── scheduler.c / scheduler.h
-│
-├── app
-│   ├── cli.c / cli.h
-│   ├── led_app.c
-│   └── status_app.c
-│
+```text
+bm_uart_cli/
+├── .cproject                     # STM32CubeIDE build configuration
+├── .project                      # Eclipse/STM32CubeIDE project metadata
+├── .settings/                    # IDE language and project settings
+├── .gitignore                    # Excludes local build artifacts
+├── Inc/
+│   ├── cli.h
+│   ├── gpio.h
+│   ├── rcc.h
+│   ├── ring_buffer.h
+│   ├── scheduler.h
+│   ├── systick.h
+│   └── uart.h
+├── Src/
+│   ├── cli.c                     # Command parsing and CLI task
+│   ├── gpio.c                    # PA5 LED control
+│   ├── main.c                    # Firmware initialization and main loop
+│   ├── rcc.c                     # Peripheral clock gates
+│   ├── ringbuffer.c              # Circular receive buffer
+│   ├── scheduler.c               # Cooperative task scheduler
+│   ├── syscalls.c                # C library system-call stubs
+│   ├── sysmem.c                  # C library memory support
+│   ├── systick.c                 # 1 ms system tick
+│   └── uart.c                    # USART2 driver and RX interrupt handler
+├── Startup/
+│   └── startup_stm32f401retx.s   # Reset handler and interrupt vector table
+├── STM32F401RETX_FLASH.ld        # Flash-target linker memory layout
 └── README.md
 ```
 
----
+## Build with STM32CubeIDE
 
-## Scheduler Design
+1. Install STM32CubeIDE and the Arm GNU Toolchain supported by that IDE.
+2. Ensure the STM32F401RE device support and compatible CMSIS core/device headers are available.
+3. Clone the repository:
+   ```bash
+   git clone https://github.com/aravindhan1/bm_uart_cli.git
+   cd bm_uart_cli
+   ```
+4. In STM32CubeIDE, import the repository as an existing project.
+5. Select the **Debug** or **Release** configuration and build the project.
+6. Flash the generated firmware to a NUCLEO-F401RE board.
+7. Open the ST-LINK Virtual COM port at 115200 8-N-1 and enter `help`.
 
-* **Type:** Cooperative, time-triggered
-* **Tick Source:** SysTick configured at 1 millisecond intervals
-* **Task Execution:** Non-blocking, periodic, and deterministic
+### CMSIS header dependency
 
-### Task Model
+The source includes `stm32f401xe.h`. The current `.cproject` configuration points to CMSIS headers in an absolute directory on the original development machine:
 
-Each task is defined as:
+- `CMSIS/Device/ST/STM32F4xx/Include`
+- `CMSIS/Include`
 
-```c
-typedef struct {
-    void (*task)(void);
-    uint32_t period_ms;
-    uint32_t last_run;
-} task_t;
-```
+Those header files are not stored in this repository. On another machine, install or provide compatible CMSIS headers and update the include paths in STM32CubeIDE before building.
 
-### Example Tasks
+## Important implementation notes
 
-| Task        | Execution Period | Function                        |
-| ----------- | ---------------- | ------------------------------- |
-| CLI Task    | 10 ms            | Parse commands from UART buffer |
-| LED Task    | 500 ms           | Toggle onboard LED              |
-| Status Task | 1000 ms          | Print system status over UART   |
+- The Flash linker script and startup assembly file are required for the current firmware target and are intentionally retained.
+- Build products such as ELF files, object files, dependency files, map/list files, and the generated `Debug/` and `Release/` directories are excluded by `.gitignore`; they are not source files.
+- The ring buffer drops newly received characters when it becomes full.
+- The source contains `task_led()` and `task_status()` functions, but the current `main()` registers only `task_cli()` with the scheduler.
+- The RCC code enables the TIM2 clock, but a PWM driver and PWM CLI command are not implemented in this version.
+- The repository does not currently include a dedicated automated test suite. Validate the firmware on the target board and check UART behaviour with a serial terminal.
 
-The scheduler iterates over tasks, checking if their configured period has elapsed and executes the ready tasks accordingly.
+## Learning topics
 
----
-
-## UART CLI Design
-
-* **Baud Rate:** 115200
-* **Mode:** TX and RX
-* **Reception:** Interrupt-driven, non-blocking
-* **Buffering:** Ring buffer to handle asynchronous input
-* **Command Termination:** Line-based (`\r`)
-
-### Supported Commands
-
-| Command       | Description                         |
-| ------------- | ----------------------------------- |
-| `help`        | Displays available commands         |
-| `led on`      | Turns the onboard LED on            |
-| `led off`     | Turns the onboard LED off           |
-| `pwm <0-100>` | Sets PWM duty cycle as a percentage |
-| `status`      | Prints system and task status       |
-
----
-
-## Interrupt Management
-
-* **SysTick:** Provides a 1 ms tick for scheduler timing
-* **USART2 RX:** Handles incoming UART characters asynchronously
-* **(Optional) EXTI:** Handles external button interrupts
-
-Interrupt priorities are configured manually using NVIC to ensure that critical tasks (e.g., UART RX) are responsive and non-blocking.
-
----
-
-## Timing Strategy
-
-* All timing and scheduling are derived from the SysTick timer
-* No blocking delays (`while` loops or `delay()` functions) are used
-* Ensures deterministic execution and minimal CPU idle time
-
----
-
-## Testing and Debugging
-
-* UART logging for debugging and interaction
-* GDB debugging using OpenOCD
-* Register inspection during ISR execution
-* LED state verification and PWM signal validation (oscilloscope optional)
-
----
-
-## Learning Outcomes
-
-* ARM Cortex-M architecture and peripheral registers
-* NVIC configuration and interrupt priority management
-* SysTick timer and cooperative scheduling concepts
-* UART driver development without HAL
-* Modular, scalable firmware design suitable for embedded systems
-
----
-
-## Future Improvements
-
-* Implementation of preemptive scheduling
-* Dynamic task creation and management
-* Software timers for delayed execution
-* Command auto-completion and advanced CLI features
-* CPU load measurement and performance profiling
-
----
+- STM32F4 register-level peripheral configuration
+- RCC clock gating
+- GPIO mode and output data registers
+- USART2 alternate-function configuration
+- Interrupt-driven UART reception
+- Circular buffer design
+- SysTick interrupt and timebase implementation
+- Cooperative scheduling
+- Command parsing in embedded C
 
 ## Author
 
-**Aravindhan TV**
+**Aravindhan TV**  
+GitHub: [@aravindhan1](https://github.com/aravindhan1)
