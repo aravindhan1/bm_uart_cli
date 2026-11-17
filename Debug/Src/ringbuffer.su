@@ -1,4 +1,0 @@
-../Src/ringbuffer.c:10:6:rb_init	16	static
-../Src/ringbuffer.c:16:6:rb_write	24	static
-../Src/ringbuffer.c:27:5:rb_read	16	static
-../Src/ringbuffer.c:38:5:rb_available	16	static

@@ -1,3 +1,0 @@
-../Src/scheduler.c:13:6:scheduler_init	4	static
-../Src/scheduler.c:17:6:scheduler_add_task	16	static
-../Src/scheduler.c:26:6:scheduler_run	16	static

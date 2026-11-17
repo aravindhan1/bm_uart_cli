@@ -1,0 +1,17 @@
+# STM32CubeIDE build artifacts
+/Debug/
+/Release/
+
+# Compiler and linker outputs
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+*.o
+*.d
+*.su
+*.cyclo
+
+# Local debugger launch configurations
+*.launch
